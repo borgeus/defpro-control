@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DEFPro Control | Missões Empresariais</title>
+    <meta name="description" content="Plataforma interativa de missões e tarefas para sua equipe. Gamificação, pontos e notificações pelo WhatsApp.">
+    <link rel="stylesheet" href="style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700;800&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div id="toast-container"></div>
+    <div id="app" class="app-container">
+
+        <!-- ═══════════════════════════════════════ -->
+        <!--              TELA DE LOGIN              -->
+        <!-- ═══════════════════════════════════════ -->
+        <section id="login-screen" class="screen glass">
+            <div class="login-logo"><img src="book_icon.png" class="brand-logo-lg"></div>
+            <h1>DEFPro Control</h1>
+            <p class="login-subtitle">Entre para começar sua próxima missão</p>
+            <form id="login-form">
+                <div class="input-group">
+                    <label for="username">Usuário</label>
+                    <input type="text" id="username" placeholder="Seu nome de usuário" autocomplete="username" required>
+                </div>
+                <div class="input-group">
+                    <label for="password">Senha</label>
+                    <input type="password" id="password" placeholder="••••••••" autocomplete="current-password" required>
+                </div>
+                <button type="submit" id="btn-login" class="btn-primary" style="margin-top:8px">Entrar no Sistema ✅</button>
+                <p id="login-error" class="error-msg hidden">Usuário ou senha incorretos!</p>
+            </form>
+        </section>
+
+        <!-- ═══════════════════════════════════════ -->
+        <!--           DASHBOARD ADMIN               -->
+        <!-- ═══════════════════════════════════════ -->
+        <section id="admin-dashboard" class="screen hidden">
+            <header class="dashboard-header glass">
+                <div class="header-brand">
+                    <img src="book_icon.png" class="brand-logo-sm"> <span>DEFPro Control</span>
+                    <span class="badge" style="margin-left:12px; font-size:0.7rem">Admin</span>
+                </div>
+                <div class="header-right">
+                    <span id="admin-greeting" style="color:var(--text-muted); font-size:0.9rem"></span>
+                    <button class="btn-nav" onclick="showDashboard('ranking')">🏆 Ranking</button>
+                    <button id="btn-admin-settings" onclick="toggleAdminSettings()" class="btn-secondary">⚙️ Config</button>
+                    <button onclick="logout()" class="btn-secondary">Sair →</button>
+                </div>
+            </header>
+
+            <!-- Painel de Configurações Admin (WhatsApp) -->
+            <div id="admin-settings-panel" class="glass panel hidden" style="margin-bottom:22px">
+                <div class="panel-title">⚙️ Configurações do Administrador</div>
+                <div class="settings-banner">💡 Cadastre seu número de WhatsApp para receber notificações quando funcionários concluírem tarefas.</div>
+                <div style="display:flex; gap:12px; align-items:flex-end">
+                    <div style="flex:1">
+                        <label style="font-size:0.85rem; color:var(--text-muted); display:block; margin-bottom:8px">Seu WhatsApp (código do país + DDD + número)</label>
+                        <input type="tel" id="admin-whatsapp" placeholder="Ex: 5511999998888">
+                    </div>
+                    <button class="btn-small" onclick="saveAdminWhatsapp()">Salvar</button>
+                </div>
+            </div>
+
+            <main class="dashboard-grid">
+                <!-- ── SIDEBAR: Equipe + Leaderboard ── -->
+                <aside>
+                    <!-- Adicionar Funcionário -->
+                    <div class="panel glass sidebar-panel" style="margin-bottom:20px">
+                        <div class="panel-title">👥 Adicionar Funcionário</div>
+                        <form id="add-user-form" class="compact-form">
+                            <!-- FOTO -->
+                            <div class="photo-upload-area">
+                                <div class="photo-preview-circle" id="photo-preview">
+                                    <span id="photo-placeholder">📷</span>
+                                    <img id="photo-preview-img" src="" alt="" style="display:none">
+                                </div>
+                                <div class="photo-upload-info">
+                                    <label for="new-user-photo" class="btn-upload">Escolher Foto</label>
+                                    <input type="file" id="new-user-photo" accept="image/*" style="display:none" onchange="previewPhoto(this)">
+                                    <p style="font-size:0.75rem; color:var(--text-muted); margin-top:4px">JPG, PNG até 2MB</p>
+                                </div>
+                            </div>
+                            <input type="text" id="new-user-name" placeholder="Nome completo" autocomplete="off" required>
+                            <input type="text" id="new-user-cargo" placeholder="Cargo/Função" autocomplete="off" required>
+                            <input type="password" id="new-user-pass" placeholder="Senha de acesso" required>
+                            <input type="tel" id="new-user-phone" placeholder="WhatsApp (Ex: 11999998888)" autocomplete="off" required>
+                            <button type="submit" class="btn-small">➕ Adicionar Funcionário</button>
+                        </form>
+
+                        <div style="margin-top:20px">
+                            <div class="panel-title" style="margin-bottom:10px">Equipe Atual</div>
+                            <ul id="users-list" class="team-list"></ul>
+                        </div>
+                    </div>
+
+                    <!-- Leaderboard -->
+                    <div class="panel glass sidebar-panel">
+                        <div class="panel-title">🏆 Ranking de XP</div>
+                        <ul id="leaderboard-list" class="leaderboard-list"></ul>
+                    </div>
+                </aside>
+
+                <!-- ── MAIN: Criar Tarefa + Monitor ── -->
+                <div class="main-panel-wrap">
+                    <!-- Formulário Nova Missão -->
+                    <div class="panel glass">
+                        <div class="panel-title">✅ Criar Nova Missão</div>
+                        <form id="add-task-form" class="task-form">
+                            <div class="full">
+                                <input type="text" id="task-title" placeholder="Título da missão" autocomplete="off" required>
+                            </div>
+                            <div class="full">
+                                <textarea id="task-desc" placeholder="Instruções detalhadas (Passo a passo para o funcionário)" autocomplete="off" required></textarea>
+                            </div>
+                            <!-- MULTI-SELECT FUNCIONÁRIOS -->
+                            <div class="full">
+                                <div class="multi-select-wrapper" id="assignee-wrapper">
+                                    <div class="multi-select-trigger" id="multi-select-trigger" onclick="toggleMultiSelect()">
+                                        <span id="multi-select-label">👤 Selecionar funcionários...</span>
+                                        <span class="multi-arrow">▾</span>
+                                    </div>
+                                    <div class="multi-select-dropdown hidden" id="multi-select-dropdown"></div>
+                                    <div class="selected-chips" id="selected-chips"></div>
+                                </div>
+                            </div>
+                            <div class="task-date-row">
+                                <label for="task-deadline">📅 Data:</label>
+                                <input type="datetime-local" id="task-deadline" required>
+                            </div>
+                            <input type="number" id="task-points" placeholder="XP (Ex: 50)" value="50" min="1" required>
+                            <div class="full">
+                                <button type="submit" class="btn-primary">🚀 Criar Missão e Notificar no WhatsApp</button>
+                            </div>
+                        </form>
+                    </div>
+
+                    <!-- Monitor de Missões -->
+                    <div class="panel glass">
+                        <div class="monitor-header">
+                            <div class="panel-title" style="margin-bottom:0">📋 Monitor de Missões</div>
+                            <span id="admin-task-count" class="task-count">0 tarefas</span>
+                        </div>
+                        <div id="admin-tasks-list" class="tasks-grid"></div>
+                    </div>
+                </div>
+            </main>
+        </section>
+
+        <!-- ═══════════════════════════════════════ -->
+        <!--         DASHBOARD FUNCIONÁRIO           -->
+        <!-- ═══════════════════════════════════════ -->
+        <section id="user-dashboard" class="screen hidden">
+            <header class="dashboard-header glass">
+                <div class="header-brand"><img src="book_icon.png" class="brand-logo-sm"> <span>DEFPro Control</span></div>
+                <div class="header-right">
+                    <button class="btn-nav" onclick="showDashboard('ranking')">🏆 Ranking Geral</button>
+                    <div class="points-chip">
+                        <div>
+                            <div class="xp-value" id="user-points-header">0</div>
+                            <div class="xp-label">Total de XP</div>
+                        </div>
+                        🔥
+                    </div>
+                    <button onclick="logout()" class="btn-secondary">Sair →</button>
+                </div>
+            </header>
+
+            <div class="user-main">
+                <!-- Boas-vindas + XP grande -->
+                <div class="welcome-panel glass" id="user-welcome-panel">
+                    <div class="welcome-text" style="display:flex; align-items:center; gap:18px">
+                        <div class="user-avatar-big" id="user-avatar-big">👤</div>
+                        <div>
+                            <div class="badge user-badge" id="user-cargo-badge">Funcionário</div>
+                            <h2 id="user-display-name">Carregando...</h2>
+                            <p id="user-task-summary">Verificando suas missões...</p>
+                        </div>
+                    </div>
+                    <div style="text-align:right">
+                        <div class="xp-big" id="user-xp-big">0 <span>XP</span></div>
+                    </div>
+                </div>
+
+                <!-- Barra de Progresso -->
+                <div class="progress-panel glass">
+                    <div class="progress-top">
+                        <h3>Progresso das Missões</h3>
+                        <span class="progress-pct" id="progress-pct">0%</span>
+                    </div>
+                    <div class="progress-bar">
+                        <div id="prog-fill" class="progress-fill" style="width:0%"></div>
+                    </div>
+                    <div class="progress-stats">
+                        <div class="stat-item">
+                            <span class="stat-value" id="stat-done" style="color:var(--success)">0</span>
+                            <span class="stat-label">Concluídas</span>
+                        </div>
+                        <div class="stat-item">
+                            <span class="stat-value" id="stat-pending" style="color:var(--warning)">0</span>
+                            <span class="stat-label">Pendentes</span>
+                        </div>
+                        <div class="stat-item">
+                            <span class="stat-value" id="stat-total">0</span>
+                            <span class="stat-label">Total</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Lista de Missões -->
+                <div>
+                    <div class="panel-title" style="padding: 0 4px; margin-bottom: 12px">🎯 Minhas Missões</div>
+                    <div id="user-tasks-list" class="tasks-grid"></div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ═══════════════════════════════════════ -->
+        <!--           DASHBOARD RANKING             -->
+        <!-- ═══════════════════════════════════════ -->
+        <section id="ranking-dashboard" class="screen hidden">
+            <header class="dashboard-header glass">
+                <div class="header-brand"><img src="book_icon.png" class="brand-logo-sm"> <span>DEFPro Control</span> <small style="font-size:0.6em; color:var(--text-muted)">RANKING 🇧🇷</small></div>
+                <div class="header-right">
+                    <button class="btn-nav" onclick="returnToDashboard()">🏠 Voltar</button>
+                    <button onclick="logout()" class="btn-secondary">Sair →</button>
+                </div>
+            </header>
+
+            <main class="user-main">
+                <div class="dash-stats-grid">
+                    <div class="stat-card green glass">
+                        <div class="s-icon">✅</div>
+                        <div class="s-value" id="stats-total-xp">0</div>
+                        <div class="s-label">XP TOTAIS</div>
+                    </div>
+                    <div class="stat-card yellow glass">
+                        <div class="s-icon">🎯</div>
+                        <div class="s-value" id="stats-tasks-done">0</div>
+                        <div class="s-label">MISSÕES OK</div>
+                    </div>
+                    <div class="stat-card blue glass">
+                        <div class="s-icon">👥</div>
+                        <div class="s-value" id="stats-total-users">0</div>
+                        <div class="s-label">EQUIPE</div>
+                    </div>
+                    <div class="stat-card white glass">
+                        <div class="s-icon">🏆</div>
+                        <div class="s-value" style="font-size:0.9rem; padding: 10px 0;" id="stats-best-user">---</div>
+                        <div class="s-label">LÍDER</div>
+                    </div>
+                </div>
+
+                <div class="podium-section">
+                    <div class="podium-row" id="podium-container"></div>
+                </div>
+
+                <div class="panel glass">
+                    <div class="panel-title">Tabela Geral</div>
+                    <div id="full-leaderboard-body"></div>
+                </div>
+            </main>
+        </section>
+
+
+
+    </div>
+    <!-- ═══════════════════════════════════════ -->
+    <!--          MODAL EDIÇÃO USUÁRIO           -->
+    <!-- ═══════════════════════════════════════ -->
+    <div id="edit-user-modal" class="modal hidden">
+        <div class="modal-content glass">
+            <div class="modal-header">
+                <h3>✏️ Editar Usuário</h3>
+                <button onclick="closeEditModal()" class="btn-close">&times;</button>
+            </div>
+            <form id="edit-user-form" class="compact-form">
+                <input type="hidden" id="edit-user-id">
+                
+                <div class="photo-upload-area">
+                    <div class="photo-preview-circle" id="edit-photo-preview">
+                        <img id="edit-photo-img" src="" alt="" style="display:none; width:100%; height:100%; object-fit:cover; border-radius:50%">
+                        <span id="edit-photo-placeholder">📷</span>
+                    </div>
+                    <div class="photo-upload-info">
+                        <label for="edit-user-photo" class="btn-upload">Alterar Foto</label>
+                        <input type="file" id="edit-user-photo" accept="image/*" style="display:none" onchange="previewEditPhoto(this)">
+                    </div>
+                </div>
+
+                <div class="input-group">
+                    <label>Nome Completo</label>
+                    <input type="text" id="edit-user-name" required>
+                </div>
+                <div class="input-group">
+                    <label>Cargo/Função</label>
+                    <input type="text" id="edit-user-cargo" required>
+                </div>
+                <div class="input-group">
+                    <label>Senha de Acesso</label>
+                    <input type="text" id="edit-user-pass" required>
+                </div>
+                <div class="input-group">
+                    <label>WhatsApp (Ex: 11999998888)</label>
+                    <input type="tel" id="edit-user-phone" required>
+                </div>
+                <div class="input-group">
+                    <label>Nível de Acesso</label>
+                    <select id="edit-user-role" class="glass-select">
+                        <option value="user">Funcionário</option>
+                        <option value="admin">Administrador</option>
+                    </select>
+                </div>
+
+                <div style="display:flex; gap:12px; margin-top:10px">
+                    <button type="submit" class="btn-primary" style="flex:1">Salvar Alterações</button>
+                    <button type="button" onclick="closeEditModal()" class="btn-secondary">Cancelar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script type="module" src="script.js"></script>
+</body>
+</html>
