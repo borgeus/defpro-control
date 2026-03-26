@@ -1,5 +1,5 @@
 // ══════════════════════════════════════════════════════
-//  DEFPro Control | Missões Empresariais - v2.5 (Online Firestore)
+//  DEFPro Control | Missões Empresariais - v2.6 (Layout Corrigido)
 // ══════════════════════════════════════════════════════
 // ── FIREBASE & CONFIG ─────────────────────────────────
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
@@ -195,7 +195,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     const addTaskForm = document.getElementById('add-task-form');
     if (addTaskForm) addTaskForm.onsubmit = async (e) => {
         e.preventDefault();
-        if (!selectedAssignees.length) return toast('⚠️ Selecione os funcionários!', 'error');
         const title = document.getElementById('task-title').value.trim();
         const desc = document.getElementById('task-desc').value.trim();
         const pts = parseInt(document.getElementById('task-points').value || 0);
@@ -216,19 +215,16 @@ function renderDashboard() {
 function renderAdminUI() {
     const list = document.getElementById('users-list');
     if (list) list.innerHTML = users.map(u => `
-        <li class="glass-item" style="display:flex; align-items:center; padding:12px; margin-bottom:10px; border-radius:12px; background:rgba(255,255,255,0.03)">
+        <li class="glass-item" style="display:flex; align-items:center; padding:12px; margin-bottom:10px; border-radius:12px; background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.05)">
             ${avatarHTML(u)}
-            <div style="flex:1; margin-left:12px">
+            <div style="flex:1; margin-left:12px; overflow:hidden">
                 <div style="display:flex; align-items:center; gap:6px">
-                    <span style="font-weight:600">${u.name}</span>
+                    <span style="font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis">${u.name}</span>
                     <span class="role-tag ${u.role==='admin'?'role-admin':'role-user'}">${u.role==='admin'?'A':'E'}</span>
                 </div>
-                <div style="font-size:0.75rem; color:var(--text-muted)">${u.cargo || '-'} • ${u.points || 0} XP</div>
+                <div style="font-size:0.75rem; color:var(--text-muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis">${u.cargo || '-'} • ${u.points || 0} XP</div>
             </div>
-            <div style="display:flex; gap:6px">
-                <button class="btn-edit" onclick="openEditUser('${u.id}')" style="background:rgba(255,255,255,0.1); border:1px solid rgba(255,255,255,0.2); padding:6px 10px; border-radius:8px; cursor:pointer">✏️ Editar</button>
-                ${u.id !== currentUser.id ? `<button onclick="deleteUser('${u.id}')" style="background:rgba(255,50,50,0.2); border:1px solid rgba(255,50,50,0.4); color:#ffdddd; padding:6px 10px; border-radius:8px; cursor:pointer">✖ Excluir</button>` : ''}
-            </div>
+            <button class="btn-edit" onclick="openEditUser('${u.id}')" style="background:rgba(255,255,255,0.1); border:1px solid rgba(255,255,255,0.2); padding:6px 12px; border-radius:8px; cursor:pointer; font-size:0.75rem; display:flex; align-items:center; gap:5px; color:#fff"><span style="font-size:1rem">✏️</span> Editar</button>
         </li>`).join('');
     const taskList = document.getElementById('admin-tasks-list');
     if (taskList) taskList.innerHTML = tasks.length ? [...tasks].reverse().map(t => {
@@ -241,7 +237,7 @@ function renderAdminUI() {
             <div style="font-size:0.8rem; margin-bottom:10px">${worker ? worker.name : '---'} • <b style="color:var(--secondary)">${t.points} XP</b></div>
             <div class="task-card-footer">
                 <span class="${done?'status-text-done':'status-text-pending'}">${done?'CONCLUÍDA':'PENDENTE'}</span>
-                <button class="btn-danger" onclick="deleteTask('${t.id}')">✖</button>
+                <button class="btn-danger" style="padding:4px 8px; border-radius:6px" onclick="deleteTask('${t.id}')">✖</button>
             </div>
         </div>`;
     }).join('') : '<p style="text-align:center; padding:20px; color:var(--text-muted)">Nenhuma missão.</p>';
@@ -286,7 +282,9 @@ async function completeTask(tid) {
     const t = tasks.find(x => x.id === tid);
     if (!confirm(`Concluir missão?`)) return;
     await updateDoc(doc(db, "tasks", tid), { status: 'completed' });
-    await updateDoc(doc(db, "users", currentUser.id), { points: (currentUser.points||0) + t.points });
+    if (t.assigneeId === currentUser.id) {
+        await updateDoc(doc(db, "users", currentUser.id), { points: (currentUser.points||0) + t.points });
+    }
     toast('🚀 Missão Concluída!');
 }
 async function deleteTask(tid) {
@@ -297,8 +295,7 @@ async function deleteUser(uid) {
     if (!u) return;
     if (confirm(`⚠️ Excluir permanentemente "${u.name}"? Isso não pode ser desfeito.`)) {
         await deleteDoc(doc(db, "users", uid));
-        const modal = document.getElementById('edit-user-modal');
-        if (modal) modal.classList.add('hidden');
+        document.getElementById('edit-user-modal').classList.add('hidden');
         toast('🗑️ Funcionário removido!');
     }
 }
@@ -316,19 +313,20 @@ function openEditUser(uid) {
     document.getElementById('edit-user-phone').value = u.phone;
     document.getElementById('edit-user-role').value = u.role;
     
-    // Adiciona botão de excluir dentro do modal se não for o próprio admin
+    // Cria o rodapé do modal com o botão de excluir
     let footer = document.querySelector('.edit-modal-footer');
     if (!footer) { 
         footer = document.createElement('div'); 
         footer.className = 'edit-modal-footer'; 
-        footer.style.marginTop = '20px';
+        footer.style.marginTop = '25px';
         footer.style.display = 'flex';
-        footer.style.justifyContent = 'space-between';
+        footer.style.flexDirection = 'column';
+        footer.style.gap = '10px';
         document.getElementById('edit-user-form').appendChild(footer);
     }
     footer.innerHTML = `
-        <button type="submit" class="btn-primary" style="flex:1">Salvar Alterações</button>
-        ${uid !== currentUser.id ? `<button type="button" class="btn-danger" onclick="deleteUser('${uid}')" style="margin-left:10px; background:rgba(255,50,50,0.2); border:1px solid rgba(255,50,50,0.4); padding:8px 15px; border-radius:8px; cursor:pointer; color:#ffdddd">Excluir Usuário</button>` : ''}
+        <button type="submit" class="btn-primary" style="width:100%; padding:12px">Salvar Alterações</button>
+        ${uid !== currentUser.id ? `<button type="button" class="btn-danger-outline" onclick="deleteUser('${uid}')" style="width:100%; background:transparent; border:1px solid rgba(255,50,50,0.4); color:#ff7a7a; padding:10px; border-radius:8px; cursor:pointer; font-size:0.85rem">🗑️ Excluir Usuário permanentemente</button>` : ''}
     `;
     
     document.getElementById('edit-user-modal').classList.remove('hidden');
