@@ -1,5 +1,5 @@
 // ══════════════════════════════════════════════════════
-//  DEFPro Control | - v2.9 (Settings & Notes Fix)
+//  DEFPro Control | - v3.0 (WhatsApp Fix)
 // ══════════════════════════════════════════════════════
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
 import { 
@@ -90,14 +90,33 @@ document.addEventListener('DOMContentLoaded', () => {
     if (addTaskForm) addTaskForm.onsubmit = async (e) => {
         e.preventDefault();
         if (!selectedAssignees.length) return toast('Selecione alguém!', 'error');
-        const t = document.getElementById('task-title').value;
-        const d = document.getElementById('task-desc').value;
-        const p = parseInt(document.getElementById('task-points').value || 0);
-        const due = document.getElementById('task-deadline').value;
+        const tTitle = document.getElementById('task-title').value;
+        const tDesc = document.getElementById('task-desc').value;
+        const tPoints = parseInt(document.getElementById('task-points').value || 0);
+        const tDue = document.getElementById('task-deadline').value;
+        
         for (const uid of selectedAssignees) {
-            await addDoc(collection(db, "tasks"), { title: t, desc: d, assigneeId: uid, points: p, dueDate: due, status: 'pending', employeeNote: '' });
+            const taskData = { 
+                title: tTitle, 
+                desc: tDesc, 
+                assigneeId: uid, 
+                points: tPoints, 
+                dueDate: tDue, 
+                status: 'pending', 
+                employeeNote: '' 
+            };
+            await addDoc(collection(db, "tasks"), taskData);
+            
+            const assignee = users.find(x => x.id === uid);
+            if (assignee) {
+                notifyByWhatsApp(taskData, assignee);
+            }
         }
-        e.target.reset(); selectedAssignees = []; updateSelectedChips(); toast('🚀 Missão Enviada!');
+        
+        e.target.reset(); 
+        selectedAssignees = []; 
+        updateSelectedChips(); 
+        toast('🚀 Missões Enviadas e WhatsApp disparado!');
     };
 });
 function renderDashboard() {
@@ -142,31 +161,22 @@ function renderUserUI() {
     const pct = myTasks.length ? Math.round((completed.length / myTasks.length) * 100) : 0;
     const avatarBig = document.getElementById('user-avatar-big');
     if (avatarBig) avatarBig.innerHTML = avatarHTML(currentUser, 'big');
-    
     const cargoBadge = document.getElementById('user-cargo-badge');
     if (cargoBadge) cargoBadge.textContent = currentUser.cargo || 'Funcionario';
-    
     const dispName = document.getElementById('user-display-name');
     if (dispName) dispName.textContent = currentUser.name;
-    
     const xpBig = document.getElementById('user-xp-big');
     if (xpBig) xpBig.textContent = currentUser.points || 0;
-    
     const ptsHeader = document.getElementById('user-points-header');
     if (ptsHeader) ptsHeader.textContent = currentUser.points || 0;
-    
     const fill = document.getElementById('prog-fill');
     if (fill) fill.style.width = `${pct}%`;
-    
     const pctText = document.getElementById('progress-pct');
     if (pctText) pctText.textContent = `${pct}%`;
-    
     const sDone = document.getElementById('stat-done');
     if (sDone) sDone.textContent = completed.length;
-    
     const sPend = document.getElementById('stat-pending');
     if (sPend) sPend.textContent = myTasks.length - completed.length;
-    
     const sTotal = document.getElementById('stat-total');
     if (sTotal) sTotal.textContent = myTasks.length;
     const list = document.getElementById('user-tasks-list');
@@ -274,6 +284,11 @@ async function completeTask(id) {
     await updateDoc(doc(db, "tasks", id), { status: 'completed' });
     await updateDoc(doc(db, "users", currentUser.id), { points: (currentUser.points||0) + t.points });
     toast('🚀 Missão Concluída!');
+}
+function notifyByWhatsApp(t, u) {
+    if (!u.phone) return;
+    const msg = encodeURIComponent(`🚀 *NOVA MISSÃO!*\n\nOlá, *${u.name}*! Você recebeu uma missão:\n\n📋 *${t.title}*\n💰 XP: *${t.points}*\n📅 Prazo: *${t.dueDate}*\n\nAcesse o sistema para ver os detalhes!`);
+    window.open(`https://wa.me/${formatPhone(u.phone)}?text=${msg}`);
 }
 function toggleMultiSelect() {
     const d = document.getElementById('multi-select-dropdown');
