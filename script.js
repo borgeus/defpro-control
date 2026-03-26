@@ -1,5 +1,5 @@
 // ══════════════════════════════════════════════════════
-//  DEFPro Control | Missões Empresariais - v2.7 (Limpeza Total)
+//  DEFPro Control | Missões Empresariais - v2.8 (Full Metrics & Photos)
 // ══════════════════════════════════════════════════════
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
 import { 
@@ -21,12 +21,6 @@ let tasks = [];
 let currentUser = JSON.parse(localStorage.getItem('th_session')) || null;
 let selectedAssignees = [];
 function saveSession() { localStorage.setItem('th_session', JSON.stringify(currentUser)); }
-function formatPhone(raw) {
-    let d = raw.replace(/\D/g, '');
-    if (d.startsWith('0')) d = d.slice(1);
-    if (!d.startsWith('55')) d = '55' + d;
-    return d;
-}
 function toast(msg, type = 'info') {
     const c = document.getElementById('toast-container');
     const e = document.createElement('div');
@@ -42,8 +36,9 @@ function showScreen(id) {
 }
 function avatarHTML(user, size = 'normal') {
     const cls = size === 'big' ? 'user-avatar-big' : 'avatar-placeholder';
-    if (user?.photo) return `<div class="${cls}"><img src="${user.photo}" style="width:100%;height:100%;object-fit:cover;border-radius:50%"></div>`;
-    return `<div class="${cls}">${(user?.name || '?').charAt(0).toUpperCase()}</div>`;
+    const style = size === 'normal' ? 'width:32px; height:32px; font-size:0.8rem;' : '';
+    if (user?.photo) return `<div class="${cls}" style="${style}"><img src="${user.photo}" style="width:100%;height:100%;object-fit:cover;border-radius:50%"></div>`;
+    return `<div class="${cls}" style="${style}">${(user?.name || '?').charAt(0).toUpperCase()}</div>`;
 }
 // ── LISTENERS ───────────────────────────────────────
 onSnapshot(collection(db, "users"), (sn) => {
@@ -96,22 +91,20 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 });
 function renderDashboard() {
+    if (!currentUser) return;
     if (currentUser.role === 'admin') renderAdminUI();
     else renderUserUI();
-    showScreen(currentUser.role);
 }
 function renderAdminUI() {
-    document.getElementById('admin-greeting').textContent = `Olá, ${currentUser.name}`;
     const list = document.getElementById('users-list');
-    // AQUI: removido qualquer botão de excluir da lista lateral
     list.innerHTML = users.map(u => `
-        <li class="glass-item" style="display:flex; align-items:center; padding:12px; margin-bottom:10px; border-radius:12px; background:rgba(255,255,255,0.03)">
+        <li class="glass-item" style="display:flex; align-items:center; padding:10px; margin-bottom:8px; border-radius:12px; background:rgba(255,255,255,0.03)">
             ${avatarHTML(u)}
             <div style="flex:1; margin-left:12px; overflow:hidden">
-                <div style="font-weight:600">${u.name}</div>
+                <div style="font-weight:600; font-size:0.9rem">${u.name}</div>
                 <div style="font-size:0.7rem; color:var(--text-muted)">${u.cargo || '-'} • ${u.points || 0} XP</div>
             </div>
-            <button onclick="openEditUser('${u.id}')" style="background:var(--secondary); border:none; padding:8px 12px; border-radius:8px; cursor:pointer; color:#000; font-weight:bold; font-size:0.8rem">✏️ Editar</button>
+            <button onclick="openEditUser('${u.id}')" style="background:var(--secondary); border:none; padding:6px 10px; border-radius:8px; cursor:pointer; color:#000; font-weight:bold; font-size:0.75rem">✏️ Editar</button>
         </li>`).join('');
     const tList = document.getElementById('admin-tasks-list');
     tList.innerHTML = tasks.length ? [...tasks].reverse().map(t => {
@@ -119,32 +112,68 @@ function renderAdminUI() {
         const done = t.status === 'completed';
         return `<div class="task-card glass ${done?'completed':''}">
             <div style="display:flex; justify-content:space-between"><h4>${t.title}</h4><div class="task-status-dot ${done?'done':''}"></div></div>
-            <p style="font-size:0.8rem; color:var(--text-muted)">Para: ${worker?worker.name:'--'}</p>
+            <p style="font-size:0.75rem; color:var(--text-muted); margin-top:5px">Para: ${worker?worker.name:'--'}</p>
             <div style="display:flex; justify-content:space-between; align-items:center; margin-top:10px">
                 <span style="color:var(--secondary); font-weight:bold">${t.points} XP</span>
                 <button onclick="deleteTask('${t.id}')" style="background:rgba(255,0,0,0.2); border:none; color:white; padding:5px 8px; border-radius:5px; cursor:pointer">✖</button>
             </div>
         </div>`;
-    }).join('') : '<p>Sem missões.</p>';
+    }).join('') : '<p style="text-align:center; padding:20px; color:var(--text-muted)">Sem missões ativas.</p>';
+    const pendingCount = tasks.filter(t => t.status === 'pending').length;
+    document.getElementById('admin-task-count').textContent = pendingCount;
 }
 function renderUserUI() {
     const myTasks = tasks.filter(t => t.assigneeId === currentUser.id);
+    const completed = myTasks.filter(t => t.status === 'completed');
+    const pct = myTasks.length ? Math.round((completed.length / myTasks.length) * 100) : 0;
+    document.getElementById('user-avatar-big').innerHTML = avatarHTML(currentUser, 'big');
+    document.getElementById('user-cargo-badge').textContent = currentUser.cargo || 'Funcionario';
     document.getElementById('user-display-name').textContent = currentUser.name;
     document.getElementById('user-xp-big').textContent = currentUser.points || 0;
+    document.getElementById('user-points-header').textContent = currentUser.points || 0;
+    document.getElementById('prog-fill').style.width = `${pct}%`;
+    document.getElementById('progress-pct').textContent = `${pct}%`;
+    document.getElementById('stat-done').textContent = completed.length;
+    document.getElementById('stat-pending').textContent = myTasks.length - completed.length;
+    document.getElementById('stat-total').textContent = myTasks.length;
     const list = document.getElementById('user-tasks-list');
     list.innerHTML = myTasks.length ? [...myTasks].reverse().map(t => {
         const done = t.status === 'completed';
         return `<div class="task-card glass ${done?'completed':''}">
             <h4>${t.title}</h4>
-            <p>${t.desc}</p>
-            ${done ? '✅ Concluída' : `<button onclick="completeTask('${t.id}')" style="background:var(--secondary); border:none; padding:8px; border-radius:5px; cursor:pointer; width:100%; margin-top:10px; font-weight:bold">Concluir Missão</button>`}
+            <p style="font-size:0.85rem; color:var(--text-muted); margin:8px 0">${t.desc}</p>
+            ${done ? '<div style="color:var(--success); font-weight:bold">✅ Missão Concluída</div>' : `<button onclick="completeTask('${t.id}')" style="background:var(--secondary); border:none; padding:10px; border-radius:8px; cursor:pointer; width:100%; margin-top:10px; font-weight:bold; color:#000">CONCLUIR +${t.points} XP</button>`}
         </div>`;
-    }).join('') : '<p>Você não tem missões.</p>';
+    }).join('') : '<p style="text-align:center; color:var(--text-muted); padding:20px">Você está em dia! Nenhuma missão disponível.</p>';
+}
+function renderRankingDashboard() {
+    const employees = users.filter(u => u.role !== 'admin');
+    const sorted = [...employees].sort((a,b) => (b.points||0) - (a.points||0));
+    
+    // Cálculos Globais
+    const totalXP = employees.reduce((acc, u) => acc + (u.points || 0), 0);
+    const totalDone = tasks.filter(t => t.status === 'completed').length;
+    const bestUser = sorted[0] ? sorted[0].name : '---';
+    document.getElementById('stats-total-xp').textContent = totalXP;
+    document.getElementById('stats-tasks-done').textContent = totalDone;
+    document.getElementById('stats-total-users').textContent = employees.length;
+    document.getElementById('stats-best-user').textContent = bestUser;
+    // Tabela Ranking
+    const list = document.getElementById('full-leaderboard-body');
+    list.innerHTML = sorted.map((u, i) => `
+        <div style="display:flex; justify-content:space-between; align-items:center; padding:12px; background:rgba(255,255,255,0.03); margin-bottom:8px; border-radius:10px">
+            <div style="display:flex; align-items:center; gap:12px">
+                <span style="font-weight:bold; width:20px">${i+1}º</span>
+                ${avatarHTML(u)}
+                <span>${u.name}</span>
+            </div>
+            <b style="color:var(--secondary)">${u.points||0} XP</b>
+        </div>`).join('');
 }
 // ── ACTIONS ──────────────────────────────────────────
 async function deleteTask(id) { if(confirm('Excluir missão?')) await deleteDoc(doc(db, "tasks", id)); }
 async function deleteUser(id) {
-    if(confirm('⚠️ EXCLUIR ESTE FUNCIONÁRIO PARA SEMPRE?')) {
+    if(confirm('⚠️ EXCLUIR ESTE FUNCIONÁRIO?')) {
         await deleteDoc(doc(db, "users", id));
         document.getElementById('edit-user-modal').classList.add('hidden');
         toast('🗑️ Usuário Removido!');
@@ -159,7 +188,6 @@ function openEditUser(id) {
     document.getElementById('edit-user-pass').value = u.pass;
     document.getElementById('edit-user-phone').value = u.phone;
     document.getElementById('edit-user-role').value = u.role;
-    // Criar o botão de exclusão apenas dentro do Modal
     let footer = document.querySelector('.edit-modal-footer');
     if(!footer) {
         footer = document.createElement('div');
@@ -197,30 +225,31 @@ function toggleMultiSelect() {
     const d = document.getElementById('multi-select-dropdown');
     if (d.classList.contains('hidden')) {
         const emps = users.filter(u => u.role !== 'admin');
-        d.innerHTML = emps.map(u => `<div onclick="toggleAssignee('${u.id}')" style="padding:10px; cursor:pointer; border-bottom:1px solid rgba(255,255,255,0.05)">${selectedAssignees.includes(u.id)?'✅':'⬜'} ${u.name}</div>`).join('');
+        d.innerHTML = emps.map(u => `
+            <div onclick="toggleAssignee('${u.id}')" style="padding:10px; cursor:pointer; display:flex; align-items:center; gap:10px; border-bottom:1px solid rgba(255,255,255,0.05)">
+                ${selectedAssignees.includes(u.id)?'✅':'⬜'} 
+                ${avatarHTML(u)}
+                <span style="font-size:0.9rem">${u.name}</span>
+            </div>`).join('');
         d.classList.remove('hidden');
     } else d.classList.add('hidden');
 }
 function toggleAssignee(id) {
     const i = selectedAssignees.indexOf(id);
     if(i===-1) selectedAssignees.push(id); else selectedAssignees.splice(i,1);
-    toggleMultiSelect(); toggleMultiSelect(); // refresh
     updateSelectedChips();
+    // Refresh visual
+    const d = document.getElementById('multi-select-dropdown');
+    d.classList.add('hidden'); toggleMultiSelect(); 
 }
 function updateSelectedChips() {
     document.getElementById('multi-select-label').textContent = selectedAssignees.length ? `${selectedAssignees.length} selecionados` : '👤 Selecionar funcionários...';
 }
 function logout() { localStorage.removeItem('th_session'); location.reload(); }
-function returnToDashboard() { renderDashboard(); }
-function showDashboard() { showScreen('ranking'); renderRankingDashboard(); }
-function renderRankingDashboard() {
-    const list = document.getElementById('full-leaderboard-body');
-    const sorted = users.filter(u => u.role !== 'admin').sort((a,b) => (b.points||0) - (a.points||0));
-    list.innerHTML = sorted.map((u, i) => `<div style="display:flex; justify-content:space-between; padding:10px; background:rgba(255,255,255,0.03); margin-bottom:5px; border-radius:8px"><span>${i+1}. ${u.name}</span><b>${u.points||0} XP</b></div>`).join('');
-}
+function returnToDashboard() { renderDashboard(); showScreen(currentUser.role); }
+function showDashboard(t) { if(t==='ranking') { showScreen('ranking'); renderRankingDashboard(); } }
 window.logout = logout; window.showDashboard = showDashboard; window.returnToDashboard = returnToDashboard;
 window.toggleMultiSelect = toggleMultiSelect; window.toggleAssignee = toggleAssignee;
 window.openEditUser = openEditUser; window.deleteUser = deleteUser;
 window.deleteTask = deleteTask; window.completeTask = completeTask;
 window.closeEditModal = () => document.getElementById('edit-user-modal').classList.add('hidden');
-window.previewPhoto = () => {};
