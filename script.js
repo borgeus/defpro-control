@@ -191,32 +191,39 @@ document.addEventListener('click', (e) => {
 });
 
 // ── INIT & LISTENERS ──────────────────────────────────
+let dbLoaded = false;
 document.addEventListener('DOMContentLoaded', async () => {
+    toast('📡 Conectando ao banco online...', 'info', 2000);
+
     // Escutar Usuários
     onSnapshot(collection(db, "users"), (snapshot) => {
         users = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        dbLoaded = true;
         
         // Bootstrap: Se não houver ninguém, cria o admin inicial
         if (users.length === 0) {
+            console.log("Criando admin inicial...");
             addDoc(collection(db, "users"), { 
                 name: 'admin', pass: 'admin123', phone: '', role: 'admin', points: 0, cargo: 'Administrador', photo: '' 
             });
         }
         
-        // Atualiza sessão se o usuário logado foi alterado
         if (currentUser) {
             const fresh = users.find(u => u.name === currentUser.name);
             if (fresh) {
                 currentUser = fresh;
                 saveSession();
             }
+            renderDashboard();
+        } else {
+            showScreen('login');
         }
-        
-        if (currentUser) renderDashboard();
-        else showScreen('login');
+    }, (error) => {
+        console.error("Erro no Firestore:", error);
+        toast('❌ Erro de permissão no Firebase. Verifique as Regras do Firestore.', 'error', 10000);
     });
 
-    // Escutar Tarefas (Ordenadas por data de criação)
+    // Escutar Tarefas
     onSnapshot(collection(db, "tasks"), (snapshot) => {
         tasks = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
         if (currentUser) renderDashboard();
@@ -229,9 +236,15 @@ function initForms() {
     // LOGIN
     document.getElementById('login-form').onsubmit = (e) => {
         e.preventDefault();
+        if (!dbLoaded) {
+            toast('⏳ Aguarde o carregamento do banco de dados...', 'info');
+            return;
+        }
+
         const nameInput = document.getElementById('username').value.trim().toLowerCase();
         const passInput = document.getElementById('password').value;
         const found = users.find(u => u.name.toLowerCase() === nameInput && u.pass === passInput);
+        
         if (found) {
             currentUser = found;
             saveSession();
@@ -239,6 +252,7 @@ function initForms() {
             renderDashboard();
             toast(`Bem-vindo, <b>${found.name}</b>! 🎉`, 'success');
         } else {
+            console.log("Tentativa de login falhou para:", nameInput);
             document.getElementById('login-error').classList.remove('hidden');
             document.getElementById('password').value = '';
         }
