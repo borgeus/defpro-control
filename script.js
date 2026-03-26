@@ -1,5 +1,5 @@
 // ══════════════════════════════════════════════════════
-//  DEFPro Control | Missões Empresariais - v2.3 (Online Firestore)
+//  DEFPro Control | Missões Empresariais - v2.4 (Online Firestore)
 // ══════════════════════════════════════════════════════
 // ── FIREBASE & CONFIG ─────────────────────────────────
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
@@ -228,7 +228,7 @@ function renderDashboard() {
 function renderAdminUI() {
     const greet = document.getElementById('admin-greeting');
     if (greet) greet.textContent = `Olá, ${currentUser.name}`;
-    // Lista Lateral
+    // Lista Lateral (Equipe)
     const list = document.getElementById('users-list');
     if (list) list.innerHTML = users.map(u => `
         <li class="glass-item" style="display:flex; align-items:center; padding:12px; margin-bottom:10px; border-radius:12px; background:rgba(255,255,255,0.03)">
@@ -240,7 +240,10 @@ function renderAdminUI() {
                 </div>
                 <div style="font-size:0.75rem; color:var(--text-muted)">${u.cargo || '-'} • ${u.points || 0} XP</div>
             </div>
-            <button class="btn-edit" onclick="openEditUser('${u.id}')">✏️</button>
+            <div style="display:flex; gap:8px">
+                <button class="btn-edit" onclick="openEditUser('${u.id}')">✏️</button>
+                ${u.id !== currentUser.id ? `<button class="btn-danger" style="background:rgba(255,50,50,0.2); border:1px solid rgba(255,50,50,0.4); border-radius:8px; padding:4px 8px; cursor:pointer" onclick="deleteUser('${u.id}')">✖</button>` : ''}
+            </div>
         </li>`).join('');
     // Monitor
     const taskList = document.getElementById('admin-tasks-list');
@@ -321,6 +324,14 @@ async function completeTask(tid) {
 async function deleteTask(tid) {
     if (confirm('Excluir missão?')) await deleteDoc(doc(db, "tasks", tid));
 }
+async function deleteUser(uid) {
+    const u = users.find(x => x.id === uid);
+    if (!u) return;
+    if (confirm(`⚠️ Tem certeza que deseja excluir "${u.name}" permanentemente?`)) {
+        await deleteDoc(doc(db, "users", uid));
+        toast('🗑️ Funcionário removido!');
+    }
+}
 async function saveTaskNote(tid) {
     const note = document.getElementById(`note-${tid}`).value.trim();
     await updateDoc(doc(db, "tasks", tid), { employeeNote: note });
@@ -369,6 +380,7 @@ window.toggleMultiSelect = toggleMultiSelect;
 window.toggleAssignee = toggleAssignee;
 window.openEditUser = openEditUser;
 window.deleteTask = deleteTask;
+window.deleteUser = deleteUser;
 window.completeTask = completeTask;
 window.saveTaskNote = saveTaskNote;
 window.closeEditModal = () => document.getElementById('edit-user-modal').classList.add('hidden');
