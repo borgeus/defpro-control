@@ -1,7 +1,6 @@
 // ══════════════════════════════════════════════════════
-//  DEFPro Control | Missões Empresariais - v2.6 (Layout Corrigido)
+//  DEFPro Control | Missões Empresariais - v2.7 (Limpeza Total)
 // ══════════════════════════════════════════════════════
-// ── FIREBASE & CONFIG ─────────────────────────────────
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
 import { 
     getFirestore, collection, addDoc, getDocs, updateDoc, deleteDoc, doc, onSnapshot, query, orderBy 
@@ -17,353 +16,211 @@ const firebaseConfig = {
 };
 const app = initializeApp(firebaseConfig);
 const db  = getFirestore(app);
-// ── STATE ─────────────────────────────────────────────
 let users = [];
 let tasks = [];
 let currentUser = JSON.parse(localStorage.getItem('th_session')) || null;
 let selectedAssignees = [];
-// ── PERSISTENCE (FIRESTORE) ───────────────────────────
-function saveSession() {
-    localStorage.setItem('th_session', JSON.stringify(currentUser));
-}
-// ── FORMATA NÚMERO WHATSAPP ────────────────────────────
+function saveSession() { localStorage.setItem('th_session', JSON.stringify(currentUser)); }
 function formatPhone(raw) {
-    let digits = raw.replace(/\D/g, '');
-    if (digits.startsWith('0')) digits = digits.slice(1);
-    if (!digits.startsWith('55')) digits = '55' + digits;
-    return digits;
+    let d = raw.replace(/\D/g, '');
+    if (d.startsWith('0')) d = d.slice(1);
+    if (!d.startsWith('55')) d = '55' + d;
+    return d;
 }
-// ── TOAST NOTIFICATION ────────────────────────────────
-function toast(message, type = 'info', duration = 3500) {
-    const container = document.getElementById('toast-container');
-    const el = document.createElement('div');
-    el.className = `toast ${type}`;
-    el.innerHTML = message;
-    container.appendChild(el);
-    setTimeout(() => {
-        el.style.opacity = '0';
-        el.style.transform = 'translateX(40px)';
-        el.style.transition = 'all 0.4s ease';
-        setTimeout(() => el.remove(), 400);
-    }, duration);
+function toast(msg, type = 'info') {
+    const c = document.getElementById('toast-container');
+    const e = document.createElement('div');
+    e.className = `toast ${type}`;
+    e.innerHTML = msg;
+    c.appendChild(e);
+    setTimeout(() => { e.style.opacity = '0'; setTimeout(() => e.remove(), 400); }, 3500);
 }
-// ── SCREEN CONTROL ────────────────────────────────────
 function showScreen(id) {
     document.querySelectorAll('.screen').forEach(s => s.classList.add('hidden'));
-    const target = id === 'login' ? 'login-screen' : `${id}-dashboard`;
-    const el = document.getElementById(target);
+    const el = document.getElementById(id === 'login' ? 'login-screen' : `${id}-dashboard`);
     if (el) el.classList.remove('hidden');
 }
-function showDashboard(type) {
-    if (type === 'ranking') {
-        showScreen('ranking');
-        renderRankingDashboard();
-    }
-}
-function returnToDashboard() {
-    showScreen(currentUser.role === 'admin' ? 'admin' : 'user');
-    renderDashboard();
-}
-function logout() {
-    currentUser = null;
-    saveSession();
-    location.reload();
-}
-// ── AVATAR HELPER ─────────────────────────────────────
 function avatarHTML(user, size = 'normal') {
     const cls = size === 'big' ? 'user-avatar-big' : 'avatar-placeholder';
-    if (user?.photo) {
-        return `<div class="${cls}"><img src="${user.photo}" alt="${user.name}" style="width:100%;height:100%;object-fit:cover;border-radius:50%"></div>`;
-    }
-    const initials = (user?.name || '?').charAt(0).toUpperCase();
-    return `<div class="${cls}" style="font-size:${size==='big'?'1.8rem':'1rem'}">${initials}</div>`;
+    if (user?.photo) return `<div class="${cls}"><img src="${user.photo}" style="width:100%;height:100%;object-fit:cover;border-radius:50%"></div>`;
+    return `<div class="${cls}">${(user?.name || '?').charAt(0).toUpperCase()}</div>`;
 }
-// ── PHOTO PREVIEW ────────────────────────────────────
-function previewPhoto(input) {
-    const file = input.files[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (e) => {
-        const img = document.getElementById('photo-preview-img');
-        const placeholder = document.getElementById('photo-placeholder');
-        if (img) { img.src = e.target.result; img.style.display = 'block'; }
-        if (placeholder) placeholder.style.display = 'none';
-    };
-    reader.readAsDataURL(file);
-}
-// ── MULTI-SELECT ─────────────────────────────────────
-function toggleMultiSelect() {
-    const dropdown = document.getElementById('multi-select-dropdown');
-    const trigger  = document.getElementById('multi-select-trigger');
-    if (!dropdown) return;
-    if (dropdown.classList.contains('hidden')) {
-        renderMultiSelectOptions();
-        dropdown.classList.remove('hidden');
-        trigger?.classList.add('open');
-    } else {
-        dropdown.classList.add('hidden');
-        trigger?.classList.remove('open');
-    }
-}
-function renderMultiSelectOptions() {
-    const employees = users.filter(u => u.role !== 'admin');
-    const dropdown  = document.getElementById('multi-select-dropdown');
-    if (!dropdown) return;
-    dropdown.innerHTML = employees.map(u => {
-        const checked = selectedAssignees.includes(u.id);
-        const avatar = u.photo ? `<img src="${u.photo}" style="width:30px;height:30px;border-radius:50%;object-fit:cover">` : `<div class="avatar-placeholder" style="width:30px;height:30px;font-size:0.7rem">${u.name.charAt(0).toUpperCase()}</div>`;
-        return `
-        <div class="ms-option ${checked ? 'checked' : ''}" onclick="toggleAssignee('${u.id}')">
-            <div class="ms-checkbox">${checked ? '✓' : ''}</div>
-            ${avatar}
-            <div style="margin-left:8px">
-                <div class="ms-name">${u.name}</div>
-                <div class="ms-cargo">${u.cargo || 'Equipe'}</div>
-            </div>
-        </div>`;
-    }).join('');
-}
-function toggleAssignee(uid) {
-    const idx = selectedAssignees.indexOf(uid);
-    if (idx === -1) selectedAssignees.push(uid);
-    else selectedAssignees.splice(idx, 1);
-    renderMultiSelectOptions();
-    updateSelectedChips();
-}
-function updateSelectedChips() {
-    const container = document.getElementById('selected-chips');
-    const label = document.getElementById('multi-select-label');
-    if (!container || !label) return;
-    if (!selectedAssignees.length) { label.textContent = '👤 Selecionar funcionários...'; container.innerHTML = ''; return; }
-    label.textContent = `${selectedAssignees.length} selecionado(s)`;
-    container.innerHTML = selectedAssignees.map(id => {
-        const u = users.find(x => x.id === id);
-        return u ? `<span class="chip">${u.name} <button onclick="toggleAssignee('${id}')">✕</button></span>` : '';
-    }).join('');
-}
-// ── INIT & LISTENERS ──────────────────────────────────
-let dbLoaded = false;
-document.addEventListener('DOMContentLoaded', async () => {
-    onSnapshot(collection(db, "users"), (snapshot) => {
-        users = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        dbLoaded = true;
-        if (users.length === 0) {
-            addDoc(collection(db, "users"), { name: 'admin', pass: 'admin123', role: 'admin', points: 0, cargo: 'Administrador', photo: '' });
-        }
-        if (currentUser) {
-            const fresh = users.find(u => u.id === currentUser.id || u.name === currentUser.name);
-            if (fresh) { currentUser = fresh; saveSession(); }
-            renderDashboard();
-        } else showScreen('login');
-    });
-    onSnapshot(collection(db, "tasks"), (snapshot) => {
-        tasks = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        if (currentUser) renderDashboard();
-    });
-    // Form Login
-    const loginForm = document.getElementById('login-form');
-    if (loginForm) loginForm.onsubmit = (e) => {
+// ── LISTENERS ───────────────────────────────────────
+onSnapshot(collection(db, "users"), (sn) => {
+    users = sn.docs.map(d => ({ id: d.id, ...d.data() }));
+    if (currentUser) {
+        const fresh = users.find(u => u.id === currentUser.id || u.name === currentUser.name);
+        if (fresh) { currentUser = fresh; saveSession(); }
+        renderDashboard();
+    } else showScreen('login');
+});
+onSnapshot(collection(db, "tasks"), (sn) => {
+    tasks = sn.docs.map(d => ({ id: d.id, ...d.data() }));
+    if (currentUser) renderDashboard();
+});
+document.addEventListener('DOMContentLoaded', () => {
+    document.getElementById('login-form').onsubmit = (e) => {
         e.preventDefault();
-        if (!dbLoaded) return toast('⏳ Carregando banco...');
-        const userIn = document.getElementById('username').value.trim().toLowerCase();
-        const passIn = document.getElementById('password').value;
-        const found = users.find(u => u.name.toLowerCase() === userIn && u.pass === passIn);
-        if (found) {
-            currentUser = found; saveSession();
-            showScreen(found.role === 'admin' ? 'admin' : 'user'); renderDashboard();
-            toast(`Bem-vindo, <b>${found.name}</b>!`, 'success');
-        } else document.getElementById('login-error')?.classList.remove('hidden');
+        const uIn = document.getElementById('username').value.trim().toLowerCase();
+        const pIn = document.getElementById('password').value;
+        const found = users.find(u => u.name.toLowerCase() === uIn && u.pass === pIn);
+        if (found) { currentUser = found; saveSession(); renderDashboard(); showScreen(found.role); }
+        else toast('Usuário ou senha incorretos!', 'error');
     };
-    // Form Add User
-    const addUserForm = document.getElementById('add-user-form');
-    if (addUserForm) addUserForm.onsubmit = (e) => {
+    document.getElementById('add-user-form').onsubmit = (e) => {
         e.preventDefault();
         const name = document.getElementById('new-user-name').value.trim();
         const cargo = document.getElementById('new-user-cargo').value.trim();
         const pass = document.getElementById('new-user-pass').value;
         const phone = document.getElementById('new-user-phone').value;
-        const phFile = document.getElementById('new-user-photo').files[0];
-        const saveToDb = async (b64 = '') => {
+        const file = document.getElementById('new-user-photo').files[0];
+        const save = async (b64 = '') => {
             await addDoc(collection(db, "users"), { name, cargo, pass, phone, role: 'user', points: 0, photo: b64 });
-            e.target.reset(); toast(`✅ ${name} adicionado!`);
+            e.target.reset(); toast('✅ Funcionário Adicionado!');
         };
-        if (phFile) { const rd = new FileReader(); rd.onload = (ev) => saveToDb(ev.target.result); rd.readAsDataURL(phFile); }
-        else saveToDb();
+        if (file) { const r = new FileReader(); r.onload = (ev) => save(ev.target.result); r.readAsDataURL(file); }
+        else save();
     };
-    const editForm = document.getElementById('edit-user-form');
-    if (editForm) editForm.onsubmit = (e) => saveUserEdit(e);
-    const addTaskForm = document.getElementById('add-task-form');
-    if (addTaskForm) addTaskForm.onsubmit = async (e) => {
+    document.getElementById('edit-user-form').onsubmit = (e) => saveUserEdit(e);
+    document.getElementById('add-task-form').onsubmit = async (e) => {
         e.preventDefault();
-        const title = document.getElementById('task-title').value.trim();
-        const desc = document.getElementById('task-desc').value.trim();
-        const pts = parseInt(document.getElementById('task-points').value || 0);
+        if (!selectedAssignees.length) return toast('Selecione alguém!', 'error');
+        const t = document.getElementById('task-title').value;
+        const d = document.getElementById('task-desc').value;
+        const p = parseInt(document.getElementById('task-points').value || 0);
         const due = document.getElementById('task-deadline').value;
         for (const uid of selectedAssignees) {
-            await addDoc(collection(db, "tasks"), { title, desc, assigneeId: uid, points: pts, dueDate: due, status: 'pending', employeeNote: '' });
-            const u = users.find(x => x.id === uid);
-            if (u) notifyByWhatsApp({ title, desc, points: pts, dueDate: due }, u);
+            await addDoc(collection(db, "tasks"), { title: t, desc: d, assigneeId: uid, points: p, dueDate: due, status: 'pending', employeeNote: '' });
         }
-        e.target.reset(); selectedAssignees = []; updateSelectedChips(); toast('🚀 Missões enviadas!');
+        e.target.reset(); selectedAssignees = []; updateSelectedChips(); toast('🚀 Missão Enviada!');
     };
 });
-// ── RENDERING ────────────────────────────────────────
 function renderDashboard() {
     if (currentUser.role === 'admin') renderAdminUI();
     else renderUserUI();
+    showScreen(currentUser.role);
 }
 function renderAdminUI() {
+    document.getElementById('admin-greeting').textContent = `Olá, ${currentUser.name}`;
     const list = document.getElementById('users-list');
-    if (list) list.innerHTML = users.map(u => `
-        <li class="glass-item" style="display:flex; align-items:center; padding:12px; margin-bottom:10px; border-radius:12px; background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.05)">
+    // AQUI: removido qualquer botão de excluir da lista lateral
+    list.innerHTML = users.map(u => `
+        <li class="glass-item" style="display:flex; align-items:center; padding:12px; margin-bottom:10px; border-radius:12px; background:rgba(255,255,255,0.03)">
             ${avatarHTML(u)}
             <div style="flex:1; margin-left:12px; overflow:hidden">
-                <div style="display:flex; align-items:center; gap:6px">
-                    <span style="font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis">${u.name}</span>
-                    <span class="role-tag ${u.role==='admin'?'role-admin':'role-user'}">${u.role==='admin'?'A':'E'}</span>
-                </div>
-                <div style="font-size:0.75rem; color:var(--text-muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis">${u.cargo || '-'} • ${u.points || 0} XP</div>
+                <div style="font-weight:600">${u.name}</div>
+                <div style="font-size:0.7rem; color:var(--text-muted)">${u.cargo || '-'} • ${u.points || 0} XP</div>
             </div>
-            <button class="btn-edit" onclick="openEditUser('${u.id}')" style="background:rgba(255,255,255,0.1); border:1px solid rgba(255,255,255,0.2); padding:6px 12px; border-radius:8px; cursor:pointer; font-size:0.75rem; display:flex; align-items:center; gap:5px; color:#fff"><span style="font-size:1rem">✏️</span> Editar</button>
+            <button onclick="openEditUser('${u.id}')" style="background:var(--secondary); border:none; padding:8px 12px; border-radius:8px; cursor:pointer; color:#000; font-weight:bold; font-size:0.8rem">✏️ Editar</button>
         </li>`).join('');
-    const taskList = document.getElementById('admin-tasks-list');
-    if (taskList) taskList.innerHTML = tasks.length ? [...tasks].reverse().map(t => {
+    const tList = document.getElementById('admin-tasks-list');
+    tList.innerHTML = tasks.length ? [...tasks].reverse().map(t => {
         const worker = users.find(u => u.id === t.assigneeId);
         const done = t.status === 'completed';
-        return `
-        <div class="task-card glass ${done ? 'completed' : ''}">
-            <div class="task-card-header"><h4>${t.title}</h4><div class="task-status-dot ${done ? 'done' : ''}"></div></div>
-            <p class="desc">${t.desc}</p>
-            <div style="font-size:0.8rem; margin-bottom:10px">${worker ? worker.name : '---'} • <b style="color:var(--secondary)">${t.points} XP</b></div>
-            <div class="task-card-footer">
-                <span class="${done?'status-text-done':'status-text-pending'}">${done?'CONCLUÍDA':'PENDENTE'}</span>
-                <button class="btn-danger" style="padding:4px 8px; border-radius:6px" onclick="deleteTask('${t.id}')">✖</button>
+        return `<div class="task-card glass ${done?'completed':''}">
+            <div style="display:flex; justify-content:space-between"><h4>${t.title}</h4><div class="task-status-dot ${done?'done':''}"></div></div>
+            <p style="font-size:0.8rem; color:var(--text-muted)">Para: ${worker?worker.name:'--'}</p>
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-top:10px">
+                <span style="color:var(--secondary); font-weight:bold">${t.points} XP</span>
+                <button onclick="deleteTask('${t.id}')" style="background:rgba(255,0,0,0.2); border:none; color:white; padding:5px 8px; border-radius:5px; cursor:pointer">✖</button>
             </div>
-        </div>`;
-    }).join('') : '<p style="text-align:center; padding:20px; color:var(--text-muted)">Nenhuma missão.</p>';
-    document.getElementById('admin-task-count').textContent = tasks.length;
-}
-function renderUserUI() {
-    const myTasks = tasks.filter(t => t.assigneeId === currentUser.id);
-    const completed = myTasks.filter(t => t.status === 'completed');
-    const pct = myTasks.length ? Math.round((completed.length / myTasks.length) * 100) : 0;
-    const avatarBig = document.getElementById('user-avatar-big');
-    if (avatarBig) avatarBig.innerHTML = avatarHTML(currentUser, 'big');
-    document.getElementById('user-display-name').textContent = currentUser.name;
-    document.getElementById('user-xp-big').innerHTML = `${currentUser.points || 0} <span>XP</span>`;
-    document.getElementById('prog-fill').style.width = `${pct}%`;
-    document.getElementById('progress-pct').textContent = `${pct}%`;
-    document.getElementById('stat-done').textContent = completed.length;
-    document.getElementById('stat-total').textContent = myTasks.length;
-    const list = document.getElementById('user-tasks-list');
-    if (list) list.innerHTML = myTasks.length ? [...myTasks].reverse().map(t => {
-        const done = t.status === 'completed';
-        return `<div class="task-card glass ${done ? 'completed' : ''}">
-            <div class="task-card-header"><h4>${t.title}</h4><div class="task-status-dot ${done ? 'done' : ''}"></div></div>
-            <p class="desc">${t.desc}</p>
-            <div class="task-card-footer"><span class="xp-pill">${t.points} XP</span>
-            ${done ? '✔' : `<button class="btn-complete" onclick="completeTask('${t.id}')">Concluir</button>`}</div>
-            <textarea id="note-${t.id}" class="notes-textarea" ${done?'disabled':''}>${t.employeeNote || ''}</textarea>
-            ${!done ? `<button class="btn-save-note" onclick="saveTaskNote('${t.id}')">Salvar</button>` : ''}
         </div>`;
     }).join('') : '<p>Sem missões.</p>';
 }
-function renderRankingDashboard() {
-    const rankList = document.getElementById('full-leaderboard-body');
-    if (!rankList) return;
-    const sorted = users.filter(u => u.role !== 'admin').sort((a,b) => (b.points||0) - (a.points||0));
-    rankList.innerHTML = sorted.map((u, i) => `
-        <div class="lb-table-row"><div class="lb-pos">${i+1}</div>
-        <div class="lb-user">${avatarHTML(u)} <span style="margin-left:10px">${u.name}</span></div>
-        <div class="lb-xp-cell">${u.points || 0} XP</div></div>`).join('');
+function renderUserUI() {
+    const myTasks = tasks.filter(t => t.assigneeId === currentUser.id);
+    document.getElementById('user-display-name').textContent = currentUser.name;
+    document.getElementById('user-xp-big').textContent = currentUser.points || 0;
+    const list = document.getElementById('user-tasks-list');
+    list.innerHTML = myTasks.length ? [...myTasks].reverse().map(t => {
+        const done = t.status === 'completed';
+        return `<div class="task-card glass ${done?'completed':''}">
+            <h4>${t.title}</h4>
+            <p>${t.desc}</p>
+            ${done ? '✅ Concluída' : `<button onclick="completeTask('${t.id}')" style="background:var(--secondary); border:none; padding:8px; border-radius:5px; cursor:pointer; width:100%; margin-top:10px; font-weight:bold">Concluir Missão</button>`}
+        </div>`;
+    }).join('') : '<p>Você não tem missões.</p>';
 }
 // ── ACTIONS ──────────────────────────────────────────
-async function completeTask(tid) {
-    const t = tasks.find(x => x.id === tid);
-    if (!confirm(`Concluir missão?`)) return;
-    await updateDoc(doc(db, "tasks", tid), { status: 'completed' });
-    if (t.assigneeId === currentUser.id) {
-        await updateDoc(doc(db, "users", currentUser.id), { points: (currentUser.points||0) + t.points });
-    }
-    toast('🚀 Missão Concluída!');
-}
-async function deleteTask(tid) {
-    if (confirm('Excluir missão?')) await deleteDoc(doc(db, "tasks", tid));
-}
-async function deleteUser(uid) {
-    const u = users.find(x => x.id === uid);
-    if (!u) return;
-    if (confirm(`⚠️ Excluir permanentemente "${u.name}"? Isso não pode ser desfeito.`)) {
-        await deleteDoc(doc(db, "users", uid));
+async function deleteTask(id) { if(confirm('Excluir missão?')) await deleteDoc(doc(db, "tasks", id)); }
+async function deleteUser(id) {
+    if(confirm('⚠️ EXCLUIR ESTE FUNCIONÁRIO PARA SEMPRE?')) {
+        await deleteDoc(doc(db, "users", id));
         document.getElementById('edit-user-modal').classList.add('hidden');
-        toast('🗑️ Funcionário removido!');
+        toast('🗑️ Usuário Removido!');
     }
 }
-async function saveTaskNote(tid) {
-    const note = document.getElementById(`note-${tid}`).value.trim();
-    await updateDoc(doc(db, "tasks", tid), { employeeNote: note });
-}
-function openEditUser(uid) {
-    const u = users.find(x => x.id === uid);
-    if (!u) return;
+function openEditUser(id) {
+    const u = users.find(x => x.id === id);
+    if(!u) return;
     document.getElementById('edit-user-id').value = u.id;
     document.getElementById('edit-user-name').value = u.name;
     document.getElementById('edit-user-cargo').value = u.cargo;
     document.getElementById('edit-user-pass').value = u.pass;
     document.getElementById('edit-user-phone').value = u.phone;
     document.getElementById('edit-user-role').value = u.role;
-    
-    // Cria o rodapé do modal com o botão de excluir
+    // Criar o botão de exclusão apenas dentro do Modal
     let footer = document.querySelector('.edit-modal-footer');
-    if (!footer) { 
-        footer = document.createElement('div'); 
-        footer.className = 'edit-modal-footer'; 
-        footer.style.marginTop = '25px';
-        footer.style.display = 'flex';
-        footer.style.flexDirection = 'column';
-        footer.style.gap = '10px';
+    if(!footer) {
+        footer = document.createElement('div');
+        footer.className = 'edit-modal-footer';
+        footer.style.marginTop = '20px';
         document.getElementById('edit-user-form').appendChild(footer);
     }
     footer.innerHTML = `
-        <button type="submit" class="btn-primary" style="width:100%; padding:12px">Salvar Alterações</button>
-        ${uid !== currentUser.id ? `<button type="button" class="btn-danger-outline" onclick="deleteUser('${uid}')" style="width:100%; background:transparent; border:1px solid rgba(255,50,50,0.4); color:#ff7a7a; padding:10px; border-radius:8px; cursor:pointer; font-size:0.85rem">🗑️ Excluir Usuário permanentemente</button>` : ''}
+        <button type="submit" style="width:100%; padding:12px; background:var(--secondary); border:none; border-radius:8px; font-weight:bold; cursor:pointer; margin-bottom:10px">Salvar Alterações</button>
+        ${id !== currentUser.id ? `<button type="button" onclick="deleteUser('${id}')" style="width:100%; padding:8px; background:transparent; border:1px solid #ff4444; color:#ff4444; border-radius:8px; cursor:pointer; font-size:0.8rem">⚠️ Excluir Funcionário</button>` : ''}
     `;
-    
     document.getElementById('edit-user-modal').classList.remove('hidden');
 }
 async function saveUserEdit(e) {
     e.preventDefault();
     const id = document.getElementById('edit-user-id').value;
-    const data = { 
+    const data = {
         name: document.getElementById('edit-user-name').value,
         cargo: document.getElementById('edit-user-cargo').value,
         pass: document.getElementById('edit-user-pass').value,
         phone: document.getElementById('edit-user-phone').value,
         role: document.getElementById('edit-user-role').value
     };
-    const ph = document.getElementById('edit-user-photo').files[0];
-    const up = async (b64) => {
-        if (b64) data.photo = b64;
-        await updateDoc(doc(db, "users", id), data);
-        document.getElementById('edit-user-modal').classList.add('hidden');
-        toast('✅ Usuário Atualizado!');
-    };
-    if (ph) { const rd = new FileReader(); rd.onload = (ev) => up(ev.target.result); rd.readAsDataURL(ph); }
-    else up();
+    await updateDoc(doc(db, "users", id), data);
+    document.getElementById('edit-user-modal').classList.add('hidden');
+    toast('✅ Atualizado!');
 }
-function notifyByWhatsApp(t, u) {
-    if (!u.phone) return;
-    window.open(`https://wa.me/${formatPhone(u.phone)}?text=${encodeURIComponent(`🚀 *NOVA MISSÃO!*\n*${t.title}*\nXP: ${t.points}`)}`);
+async function completeTask(id) {
+    const t = tasks.find(x => x.id === id);
+    await updateDoc(doc(db, "tasks", id), { status: 'completed' });
+    await updateDoc(doc(db, "users", currentUser.id), { points: (currentUser.points||0) + t.points });
+    toast('🚀 Missão Concluída!');
 }
-window.logout = logout;
-window.showDashboard = showDashboard;
-window.returnToDashboard = returnToDashboard;
-window.previewPhoto = previewPhoto;
-window.toggleMultiSelect = toggleMultiSelect;
-window.toggleAssignee = toggleAssignee;
-window.openEditUser = openEditUser;
-window.deleteTask = deleteTask;
-window.deleteUser = deleteUser;
-window.completeTask = completeTask;
-window.saveTaskNote = saveTaskNote;
+function toggleMultiSelect() {
+    const d = document.getElementById('multi-select-dropdown');
+    if (d.classList.contains('hidden')) {
+        const emps = users.filter(u => u.role !== 'admin');
+        d.innerHTML = emps.map(u => `<div onclick="toggleAssignee('${u.id}')" style="padding:10px; cursor:pointer; border-bottom:1px solid rgba(255,255,255,0.05)">${selectedAssignees.includes(u.id)?'✅':'⬜'} ${u.name}</div>`).join('');
+        d.classList.remove('hidden');
+    } else d.classList.add('hidden');
+}
+function toggleAssignee(id) {
+    const i = selectedAssignees.indexOf(id);
+    if(i===-1) selectedAssignees.push(id); else selectedAssignees.splice(i,1);
+    toggleMultiSelect(); toggleMultiSelect(); // refresh
+    updateSelectedChips();
+}
+function updateSelectedChips() {
+    document.getElementById('multi-select-label').textContent = selectedAssignees.length ? `${selectedAssignees.length} selecionados` : '👤 Selecionar funcionários...';
+}
+function logout() { localStorage.removeItem('th_session'); location.reload(); }
+function returnToDashboard() { renderDashboard(); }
+function showDashboard() { showScreen('ranking'); renderRankingDashboard(); }
+function renderRankingDashboard() {
+    const list = document.getElementById('full-leaderboard-body');
+    const sorted = users.filter(u => u.role !== 'admin').sort((a,b) => (b.points||0) - (a.points||0));
+    list.innerHTML = sorted.map((u, i) => `<div style="display:flex; justify-content:space-between; padding:10px; background:rgba(255,255,255,0.03); margin-bottom:5px; border-radius:8px"><span>${i+1}. ${u.name}</span><b>${u.points||0} XP</b></div>`).join('');
+}
+window.logout = logout; window.showDashboard = showDashboard; window.returnToDashboard = returnToDashboard;
+window.toggleMultiSelect = toggleMultiSelect; window.toggleAssignee = toggleAssignee;
+window.openEditUser = openEditUser; window.deleteUser = deleteUser;
+window.deleteTask = deleteTask; window.completeTask = completeTask;
 window.closeEditModal = () => document.getElementById('edit-user-modal').classList.add('hidden');
+window.previewPhoto = () => {};
