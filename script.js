@@ -1,5 +1,5 @@
 // ══════════════════════════════════════════════════════
-//  DEFPro Control | Missões Empresariais - v2.8 (Full Metrics & Photos)
+//  DEFPro Control | - v2.9 (Settings & Notes Fix)
 // ══════════════════════════════════════════════════════
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
 import { 
@@ -21,6 +21,12 @@ let tasks = [];
 let currentUser = JSON.parse(localStorage.getItem('th_session')) || null;
 let selectedAssignees = [];
 function saveSession() { localStorage.setItem('th_session', JSON.stringify(currentUser)); }
+function formatPhone(raw) {
+    let d = raw.replace(/\D/g, '');
+    if (d.startsWith('0')) d = d.slice(1);
+    if (!d.startsWith('55')) d = '55' + d;
+    return d;
+}
 function toast(msg, type = 'info') {
     const c = document.getElementById('toast-container');
     const e = document.createElement('div');
@@ -54,7 +60,8 @@ onSnapshot(collection(db, "tasks"), (sn) => {
     if (currentUser) renderDashboard();
 });
 document.addEventListener('DOMContentLoaded', () => {
-    document.getElementById('login-form').onsubmit = (e) => {
+    const loginForm = document.getElementById('login-form');
+    if (loginForm) loginForm.onsubmit = (e) => {
         e.preventDefault();
         const uIn = document.getElementById('username').value.trim().toLowerCase();
         const pIn = document.getElementById('password').value;
@@ -62,7 +69,8 @@ document.addEventListener('DOMContentLoaded', () => {
         if (found) { currentUser = found; saveSession(); renderDashboard(); showScreen(found.role); }
         else toast('Usuário ou senha incorretos!', 'error');
     };
-    document.getElementById('add-user-form').onsubmit = (e) => {
+    const addUserForm = document.getElementById('add-user-form');
+    if (addUserForm) addUserForm.onsubmit = (e) => {
         e.preventDefault();
         const name = document.getElementById('new-user-name').value.trim();
         const cargo = document.getElementById('new-user-cargo').value.trim();
@@ -76,8 +84,10 @@ document.addEventListener('DOMContentLoaded', () => {
         if (file) { const r = new FileReader(); r.onload = (ev) => save(ev.target.result); r.readAsDataURL(file); }
         else save();
     };
-    document.getElementById('edit-user-form').onsubmit = (e) => saveUserEdit(e);
-    document.getElementById('add-task-form').onsubmit = async (e) => {
+    const editForm = document.getElementById('edit-user-form');
+    if (editForm) editForm.onsubmit = (e) => saveUserEdit(e);
+    const addTaskForm = document.getElementById('add-task-form');
+    if (addTaskForm) addTaskForm.onsubmit = async (e) => {
         e.preventDefault();
         if (!selectedAssignees.length) return toast('Selecione alguém!', 'error');
         const t = document.getElementById('task-title').value;
@@ -96,8 +106,10 @@ function renderDashboard() {
     else renderUserUI();
 }
 function renderAdminUI() {
+    const greeting = document.getElementById('admin-greeting');
+    if (greeting) greeting.textContent = `Olá, ${currentUser.name}`;
     const list = document.getElementById('users-list');
-    list.innerHTML = users.map(u => `
+    if (list) list.innerHTML = users.map(u => `
         <li class="glass-item" style="display:flex; align-items:center; padding:10px; margin-bottom:8px; border-radius:12px; background:rgba(255,255,255,0.03)">
             ${avatarHTML(u)}
             <div style="flex:1; margin-left:12px; overflow:hidden">
@@ -107,7 +119,7 @@ function renderAdminUI() {
             <button onclick="openEditUser('${u.id}')" style="background:var(--secondary); border:none; padding:6px 10px; border-radius:8px; cursor:pointer; color:#000; font-weight:bold; font-size:0.75rem">✏️ Editar</button>
         </li>`).join('');
     const tList = document.getElementById('admin-tasks-list');
-    tList.innerHTML = tasks.length ? [...tasks].reverse().map(t => {
+    if (tList) tList.innerHTML = tasks.length ? [...tasks].reverse().map(t => {
         const worker = users.find(u => u.id === t.assigneeId);
         const done = t.status === 'completed';
         return `<div class="task-card glass ${done?'completed':''}">
@@ -117,40 +129,65 @@ function renderAdminUI() {
                 <span style="color:var(--secondary); font-weight:bold">${t.points} XP</span>
                 <button onclick="deleteTask('${t.id}')" style="background:rgba(255,0,0,0.2); border:none; color:white; padding:5px 8px; border-radius:5px; cursor:pointer">✖</button>
             </div>
+            ${t.employeeNote ? `<div style="background:rgba(255,255,255,0.05); padding:8px; border-radius:8px; font-size:0.75rem; color:var(--secondary); border:1px solid rgba(255,215,0,0.1); margin-top:10px">💬 <b>Feedback:</b> "${t.employeeNote}"</div>` : ''}
         </div>`;
     }).join('') : '<p style="text-align:center; padding:20px; color:var(--text-muted)">Sem missões ativas.</p>';
     const pendingCount = tasks.filter(t => t.status === 'pending').length;
-    document.getElementById('admin-task-count').textContent = pendingCount;
+    const countEl = document.getElementById('admin-task-count');
+    if (countEl) countEl.textContent = pendingCount;
 }
 function renderUserUI() {
     const myTasks = tasks.filter(t => t.assigneeId === currentUser.id);
     const completed = myTasks.filter(t => t.status === 'completed');
     const pct = myTasks.length ? Math.round((completed.length / myTasks.length) * 100) : 0;
-    document.getElementById('user-avatar-big').innerHTML = avatarHTML(currentUser, 'big');
-    document.getElementById('user-cargo-badge').textContent = currentUser.cargo || 'Funcionario';
-    document.getElementById('user-display-name').textContent = currentUser.name;
-    document.getElementById('user-xp-big').textContent = currentUser.points || 0;
-    document.getElementById('user-points-header').textContent = currentUser.points || 0;
-    document.getElementById('prog-fill').style.width = `${pct}%`;
-    document.getElementById('progress-pct').textContent = `${pct}%`;
-    document.getElementById('stat-done').textContent = completed.length;
-    document.getElementById('stat-pending').textContent = myTasks.length - completed.length;
-    document.getElementById('stat-total').textContent = myTasks.length;
+    const avatarBig = document.getElementById('user-avatar-big');
+    if (avatarBig) avatarBig.innerHTML = avatarHTML(currentUser, 'big');
+    
+    const cargoBadge = document.getElementById('user-cargo-badge');
+    if (cargoBadge) cargoBadge.textContent = currentUser.cargo || 'Funcionario';
+    
+    const dispName = document.getElementById('user-display-name');
+    if (dispName) dispName.textContent = currentUser.name;
+    
+    const xpBig = document.getElementById('user-xp-big');
+    if (xpBig) xpBig.textContent = currentUser.points || 0;
+    
+    const ptsHeader = document.getElementById('user-points-header');
+    if (ptsHeader) ptsHeader.textContent = currentUser.points || 0;
+    
+    const fill = document.getElementById('prog-fill');
+    if (fill) fill.style.width = `${pct}%`;
+    
+    const pctText = document.getElementById('progress-pct');
+    if (pctText) pctText.textContent = `${pct}%`;
+    
+    const sDone = document.getElementById('stat-done');
+    if (sDone) sDone.textContent = completed.length;
+    
+    const sPend = document.getElementById('stat-pending');
+    if (sPend) sPend.textContent = myTasks.length - completed.length;
+    
+    const sTotal = document.getElementById('stat-total');
+    if (sTotal) sTotal.textContent = myTasks.length;
     const list = document.getElementById('user-tasks-list');
-    list.innerHTML = myTasks.length ? [...myTasks].reverse().map(t => {
+    if (list) list.innerHTML = myTasks.length ? [...myTasks].reverse().map(t => {
         const done = t.status === 'completed';
         return `<div class="task-card glass ${done?'completed':''}">
             <h4>${t.title}</h4>
             <p style="font-size:0.85rem; color:var(--text-muted); margin:8px 0">${t.desc}</p>
             ${done ? '<div style="color:var(--success); font-weight:bold">✅ Missão Concluída</div>' : `<button onclick="completeTask('${t.id}')" style="background:var(--secondary); border:none; padding:10px; border-radius:8px; cursor:pointer; width:100%; margin-top:10px; font-weight:bold; color:#000">CONCLUIR +${t.points} XP</button>`}
+            
+            <div style="margin-top:15px; border-top:1px solid rgba(255,255,255,0.1); padding-top:10px">
+                <label style="font-size:0.7rem; color:var(--text-muted); display:block; margin-bottom:5px">Observação / Nota:</label>
+                <textarea id="note-${t.id}" style="width:100%; height:50px; background:rgba(0,0,0,0.2); border:1px solid rgba(255,255,255,0.1); border-radius:5px; color:white; font-size:0.8rem; padding:8px; resize:none" placeholder="Escreva algo sobre esta missão..." ${done?'disabled':''}>${t.employeeNote || ''}</textarea>
+                ${!done ? `<button onclick="saveTaskNote('${t.id}')" style="margin-top:5px; padding:4px 10px; font-size:0.7rem; border-radius:4px; border:none; background:rgba(255,255,255,0.1); color:white; cursor:pointer">Salvar Nota</button>` : ''}
+            </div>
         </div>`;
-    }).join('') : '<p style="text-align:center; color:var(--text-muted); padding:20px">Você está em dia! Nenhuma missão disponível.</p>';
+    }).join('') : '<p style="text-align:center; color:var(--text-muted); padding:20px">Você está em dia!</p>';
 }
 function renderRankingDashboard() {
     const employees = users.filter(u => u.role !== 'admin');
     const sorted = [...employees].sort((a,b) => (b.points||0) - (a.points||0));
-    
-    // Cálculos Globais
     const totalXP = employees.reduce((acc, u) => acc + (u.points || 0), 0);
     const totalDone = tasks.filter(t => t.status === 'completed').length;
     const bestUser = sorted[0] ? sorted[0].name : '---';
@@ -158,9 +195,8 @@ function renderRankingDashboard() {
     document.getElementById('stats-tasks-done').textContent = totalDone;
     document.getElementById('stats-total-users').textContent = employees.length;
     document.getElementById('stats-best-user').textContent = bestUser;
-    // Tabela Ranking
     const list = document.getElementById('full-leaderboard-body');
-    list.innerHTML = sorted.map((u, i) => `
+    if (list) list.innerHTML = sorted.map((u, i) => `
         <div style="display:flex; justify-content:space-between; align-items:center; padding:12px; background:rgba(255,255,255,0.03); margin-bottom:8px; border-radius:10px">
             <div style="display:flex; align-items:center; gap:12px">
                 <span style="font-weight:bold; width:20px">${i+1}º</span>
@@ -171,6 +207,24 @@ function renderRankingDashboard() {
         </div>`).join('');
 }
 // ── ACTIONS ──────────────────────────────────────────
+function toggleAdminSettings() {
+    const panel = document.getElementById('admin-settings-panel');
+    if (panel) panel.classList.toggle('hidden');
+}
+async function saveAdminWhatsapp() {
+    const phone = document.getElementById('admin-whatsapp').value;
+    const adminUser = users.find(u => u.role === 'admin');
+    if (adminUser) {
+        await updateDoc(doc(db, "users", adminUser.id), { phone });
+        toast('✅ Configurações salvas!', 'success');
+        toggleAdminSettings();
+    }
+}
+async function saveTaskNote(tid) {
+    const note = document.getElementById(`note-${tid}`).value.trim();
+    await updateDoc(doc(db, "tasks", tid), { employeeNote: note });
+    toast('✅ Nota salva com sucesso!', 'success');
+}
 async function deleteTask(id) { if(confirm('Excluir missão?')) await deleteDoc(doc(db, "tasks", id)); }
 async function deleteUser(id) {
     if(confirm('⚠️ EXCLUIR ESTE FUNCIONÁRIO?')) {
@@ -238,7 +292,6 @@ function toggleAssignee(id) {
     const i = selectedAssignees.indexOf(id);
     if(i===-1) selectedAssignees.push(id); else selectedAssignees.splice(i,1);
     updateSelectedChips();
-    // Refresh visual
     const d = document.getElementById('multi-select-dropdown');
     d.classList.add('hidden'); toggleMultiSelect(); 
 }
@@ -248,8 +301,16 @@ function updateSelectedChips() {
 function logout() { localStorage.removeItem('th_session'); location.reload(); }
 function returnToDashboard() { renderDashboard(); showScreen(currentUser.role); }
 function showDashboard(t) { if(t==='ranking') { showScreen('ranking'); renderRankingDashboard(); } }
-window.logout = logout; window.showDashboard = showDashboard; window.returnToDashboard = returnToDashboard;
-window.toggleMultiSelect = toggleMultiSelect; window.toggleAssignee = toggleAssignee;
-window.openEditUser = openEditUser; window.deleteUser = deleteUser;
-window.deleteTask = deleteTask; window.completeTask = completeTask;
+window.logout = logout; 
+window.showDashboard = showDashboard; 
+window.returnToDashboard = returnToDashboard;
+window.toggleMultiSelect = toggleMultiSelect; 
+window.toggleAssignee = toggleAssignee;
+window.openEditUser = openEditUser; 
+window.deleteUser = deleteUser;
+window.deleteTask = deleteTask; 
+window.completeTask = completeTask;
+window.toggleAdminSettings = toggleAdminSettings;
+window.saveAdminWhatsapp = saveAdminWhatsapp;
+window.saveTaskNote = saveTaskNote;
 window.closeEditModal = () => document.getElementById('edit-user-modal').classList.add('hidden');
